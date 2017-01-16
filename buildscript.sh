@@ -4,16 +4,26 @@
 # JAVA_HOME =
 # ANDROID_HOME =
 
+# ======= Настройки скрипта =======
+COMPILE_SDK_VERSION="25"
+BUILD_TOOLS_VERSION="25.0.1"
+PACKAGE_NAME="ru.altarix.training.withoutgradle"
+
 # ======= Создаем вспомогательные переменные директории =======
 # Скрипт должен находиться в корне проекта, записываем в переменную среды как директорию корневого проекта
 ROOT_PROJECT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )";
-
+# Пускай имя проекта будет такое же как и имя корневой папки
+PROJECT_NAME=${ROOT_PROJECT_DIR##*/}
+# Для сохранения привычной всем структуры проекта субпроект приложения будет находиться в папке /app корневого проекта
+APP_PROJECT_DIR="${ROOT_PROJECT_DIR}/app"
+# Привычная папка build в папке приложения для сохранения результатов сборки.
+APP_BUILD_DIR="$APP_PROJECT_DIR/build"
 # Создаем директорию, если ее нет.
-mkdir -p ${ROOT_PROJECT_DIR}/app/build
+mkdir -p ${APP_BUILD_DIR}
 
 # ======= Создаем ключ для подписи apk =======
 echo "=== (Re)Making keystore..."
-rm -rf "${ROOT_PROJECT_DIR}/withoutGradle.keystore"
+rm -rf "${ROOT_PROJECT_DIR}/${PROJECT_NAME}.keystore"
 ${JAVA_HOME}/bin/keytool \
         -genkeypair \
         -validity 10000 \
@@ -23,53 +33,61 @@ ${JAVA_HOME}/bin/keytool \
                 L=Samara,
                 S=Samara,
                 C=RU" \
-        -keystore "${ROOT_PROJECT_DIR}/withoutGradle.keystore" \
+        -keystore "${ROOT_PROJECT_DIR}/${PROJECT_NAME}.keystore" \
         -storepass password \
         -keypass password \
-        -alias withoutGradleKey \
+        -alias ${PROJECT_NAME}Key \
         -keyalg RSA
 
 # ======= Создаем R.java =======
 echo "=== Creating R.java..."
-mkdir -p ${ROOT_PROJECT_DIR}/app/build/generated_/source/r/release
-${ANDROID_HOME}/build-tools/25.0.1/aapt \
+APP_SOURCES_DIR="${APP_PROJECT_DIR}/src/main/java"
+GEN_SOURCES_DIR="${APP_BUILD_DIR}/generated_/source/r/release"
+mkdir -p ${GEN_SOURCES_DIR}
+
+${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/aapt \
         package \
         -f \
         -m \
-        -S ${ROOT_PROJECT_DIR}/app/src/main/res \
-        -J ${ROOT_PROJECT_DIR}/app/build/generated_/source/r/release \
-        -M ${ROOT_PROJECT_DIR}/app/src/main/AndroidManifest.xml \
-        -I ${ANDROID_HOME}/platforms/android-25/android.jar
+        -S ${APP_PROJECT_DIR}/src/main/res \
+        -J ${GEN_SOURCES_DIR} \
+        -M ${APP_PROJECT_DIR}/src/main/AndroidManifest.xml \
+        -I ${ANDROID_HOME}/platforms/android-${COMPILE_SDK_VERSION}/android.jar
 
 # ======= Компилируем .class файлы =======
 echo "=== Compiling with javac..."
-CLASSES_DIR="${ROOT_PROJECT_DIR}/app/build/intermediates_/classes/release"
+CLASSES_DIR="${APP_BUILD_DIR}/intermediates_/classes/release"
 mkdir -p ${CLASSES_DIR}
+
 ${JAVA_HOME}/bin/javac \
         -source 1.7 \
         -target 1.7 \
         -d ${CLASSES_DIR} \
         -g \
         -encoding UTF-8 \
-        -bootclasspath /home/amak/Android/Sdk/platforms/android-25/android.jar \
-        -sourcepath ${ROOT_PROJECT_DIR}/app/src/main/java \
+        -bootclasspath /home/amak/Android/Sdk/platforms/android-${COMPILE_SDK_VERSION}/android.jar \
+        -sourcepath ${APP_SOURCES_DIR} \
         -classpath ${CLASSES_DIR} \
-            ${ROOT_PROJECT_DIR}/app/build/generated_/source/r/release/ru/altarix/training/withoutgradle/R.java \
-            ${ROOT_PROJECT_DIR}/app/src/main/java/ru/altarix/training/withoutgradle/MainActivity.java \
+            ${GEN_SOURCES_DIR}/${PACKAGE_NAME//./\/}/R.java \
+            ${APP_SOURCES_DIR}/${PACKAGE_NAME//./\/}/MainActivity.java \
         -XDuseUnsharedTable=true
 
 # ======= Компилируем .dex файл =======
 echo "=== Creating DEX..."
-mkdir -p ${ROOT_PROJECT_DIR}/app/build/intermediates_/dex/release
-${ANDROID_HOME}/build-tools/25.0.1/dx \
+DEX_DIR="${APP_BUILD_DIR}/intermediates_/dex/release"
+mkdir -p ${DEX_DIR}
+
+${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/dx \
         --dex \
-        --output=${ROOT_PROJECT_DIR}/app/build/intermediates_/dex/release/classes.dex \
+        --output=${DEX_DIR}/classes.dex \
         ${CLASSES_DIR} \
 
 # ======= Собираем apk =======
 echo "=== Producing APK..."
-mkdir -p ${ROOT_PROJECT_DIR}/app/build/intermediates_/apk
-${ANDROID_HOME}/build-tools/25.0.1/aapt \
+APK_INTERMEDIATES="${APP_BUILD_DIR}/intermediates_/apk"
+mkdir -p ${APK_INTERMEDIATES}
+
+${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/aapt \
         package \
         -f \
         --auto-add-overlay \
@@ -77,40 +95,41 @@ ${ANDROID_HOME}/build-tools/25.0.1/aapt \
         --target-sdk-version 25 \
         --version-code 1 \
         --version-name 1.0 \
-        -S ${ROOT_PROJECT_DIR}/app/src/main/res \
-        -M ${ROOT_PROJECT_DIR}/app/src/main/AndroidManifest.xml \
-        -I ${ANDROID_HOME}/platforms/android-25/android.jar \
-        -F ${ROOT_PROJECT_DIR}/app/build/intermediates_/apk/withoutGradle.unsigned.apk \
-        ${ROOT_PROJECT_DIR}/app/build/intermediates_/dex/release
+        -S ${APP_PROJECT_DIR}/src/main/res \
+        -M ${APP_PROJECT_DIR}/src/main/AndroidManifest.xml \
+        -I ${ANDROID_HOME}/platforms/android-${COMPILE_SDK_VERSION}/android.jar \
+        -F ${APK_INTERMEDIATES}/${PROJECT_NAME}.unsigned.apk \
+        ${DEX_DIR}
 
 # ======= Подписываем apk =======
 echo "=== Signing APK..."
 ${JAVA_HOME}/bin/jarsigner \
-        -keystore "${ROOT_PROJECT_DIR}/withoutGradle.keystore" \
+        -keystore "${ROOT_PROJECT_DIR}/${PROJECT_NAME}.keystore" \
         -storepass password \
         -keypass password \
-        -signedjar ${ROOT_PROJECT_DIR}/app/build/intermediates_/apk/withoutGradle.signed.apk \
-        ${ROOT_PROJECT_DIR}/app/build/intermediates_/apk/withoutGradle.unsigned.apk \
-        withoutGradleKey
+        -signedjar ${APK_INTERMEDIATES}/${PROJECT_NAME}.signed.apk \
+        ${APK_INTERMEDIATES}/${PROJECT_NAME}.unsigned.apk \
+        ${PROJECT_NAME}Key
 
 # ======= Выравниваем apk =======
 echo "=== ZipAligning APK..."
-OUTPUT_APK_DIR="${ROOT_PROJECT_DIR}/app/build/outputs_/apk"
-mkdir -p ${ROOT_PROJECT_DIR}/app/build/outputs_/apk
-${ANDROID_HOME}/build-tools/25.0.1/zipalign \
+OUTPUT_APK_DIR="${APP_BUILD_DIR}/outputs_/apk"
+mkdir -p ${OUTPUT_APK_DIR}
+
+${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/zipalign \
         -f \
         4 \
-        ${ROOT_PROJECT_DIR}/app/build/intermediates_/apk/withoutGradle.signed.apk \
-        ${ROOT_PROJECT_DIR}/app/build/outputs_/apk/withoutGradle.apk
+        ${APK_INTERMEDIATES}/${PROJECT_NAME}.signed.apk \
+        ${OUTPUT_APK_DIR}/${PROJECT_NAME}.apk
 
 # ======= Устанавливаем приложение =======
 echo "=== Installing app"
 ${ANDROID_HOME}/platform-tools/adb \
         -d \
-        install -r ${ROOT_PROJECT_DIR}/app/build/outputs_/apk/withoutGradle.apk
+        install -r ${OUTPUT_APK_DIR}/${PROJECT_NAME}.apk
 
-# ======= Запускаем приложение =======
+# ======= Заапускаем приложение =======
 echo "=== Starting app"
 ${ANDROID_HOME}/platform-tools/adb \
         shell \
-        am start ru.altarix.training.withoutgradle/.MainActivity
+        am start ${PACKAGE_NAME}/.MainActivity
