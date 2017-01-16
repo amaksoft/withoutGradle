@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 # Эти переменные среды желательно объявить в системе. Но можно и тут, если лень
-# JAVA_HOME =
-# ANDROID_HOME =
+# JAVA_HOME=
+# ANDROID_HOME=
 
 # ======= Настройки скрипта =======
 COMPILE_SDK_VERSION="25"
-BUILD_TOOLS_VERSION="25.0.1"
+BUILD_TOOLS_VERSION="25.0.0"
 PACKAGE_NAME="ru.altarix.training.withoutgradle"
 
 # ======= Создаем вспомогательные переменные директории =======
@@ -54,33 +54,15 @@ ${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/aapt \
         -M ${APP_PROJECT_DIR}/src/main/AndroidManifest.xml \
         -I ${ANDROID_HOME}/platforms/android-${COMPILE_SDK_VERSION}/android.jar
 
-# ======= Компилируем .class файлы =======
-echo "=== Compiling with javac..."
-CLASSES_DIR="${APP_BUILD_DIR}/intermediates_/classes/release"
-mkdir -p ${CLASSES_DIR}
-
-${JAVA_HOME}/bin/javac \
-        -source 1.7 \
-        -target 1.7 \
-        -d ${CLASSES_DIR} \
-        -g \
-        -encoding UTF-8 \
-        -bootclasspath /home/amak/Android/Sdk/platforms/android-${COMPILE_SDK_VERSION}/android.jar \
-        -sourcepath ${APP_SOURCES_DIR} \
-        -classpath ${CLASSES_DIR} \
-            ${GEN_SOURCES_DIR}/${PACKAGE_NAME//./\/}/R.java \
-            ${APP_SOURCES_DIR}/${PACKAGE_NAME//./\/}/MainActivity.java \
-        -XDuseUnsharedTable=true
-
 # ======= Компилируем .dex файл =======
 echo "=== Creating DEX..."
 DEX_DIR="${APP_BUILD_DIR}/intermediates_/dex/release"
 mkdir -p ${DEX_DIR}
 
-${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/dx \
-        --dex \
-        --output=${DEX_DIR}/classes.dex \
-        ${CLASSES_DIR} \
+java -jar ${ANDROID_HOME}/build-tools/${BUILD_TOOLS_VERSION}/jack.jar \
+        --classpath "${ANDROID_HOME}/platforms/android-${COMPILE_SDK_VERSION}/android.jar" \
+        --output-dex ${DEX_DIR} \
+        ${APP_SOURCES_DIR}/ ${GEN_SOURCES_DIR}/
 
 # ======= Собираем apk =======
 echo "=== Producing APK..."
